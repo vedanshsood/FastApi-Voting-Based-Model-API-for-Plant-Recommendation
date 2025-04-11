@@ -1,59 +1,55 @@
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from data import Data
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import joblib
-import pandas as pd
 import numpy as np
+
+# Load the trained pipeline and MultiLabelBinarizer
+model = joblib.load("Voting_model.pkl")
+mlb = joblib.load("mlb.pkl")
 
 app = FastAPI()
 
-# Load the model and multi-label binarizer
-try:
-    pipe_voting = joblib.load("Voting_model.pkl")
-    mlb = joblib.load("mlb.pkl")  # Ensure you have saved this object too
-except Exception as e:
-    print(f"❌ Error loading model or mlb: {str(e)}")
-    pipe_voting = None
-    mlb = None
+# ✅ Enable CORS for all origins (change "*" to your frontend URL for security)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000/"],  
+    allow_credentials=True,
+    allow_methods=["http://localhost:3000/"],
+    allow_headers=["http://localhost:3000/"],
+)
 
-def predict_top_plants(input_data):
-    try:
-        input_df = pd.DataFrame([input_data])
-        print(f"✅ Input DataFrame:\n{input_df}")
-
-        if pipe_voting is None or mlb is None:
-            raise ValueError("Model or label binarizer not loaded")
-
-        probs = pipe_voting.predict_proba(input_df)
-        avg_probs = np.array([p[0] if isinstance(p, list) else p for p in probs]).flatten()
-        top3_indices = avg_probs.argsort()[::-1][:3]
-
-        top_plants = [
-            {"plant": mlb.classes_[i], "confidence": round(avg_probs[i], 2)}
-            for i in top3_indices
-        ]
-
-        return top_plants
-    except Exception as e:
-        print(f"❌ Prediction error: {str(e)}")
-        return []
+# Define the input data model
+class PollutionInput(BaseModel):
+    PM2_5: float
+    PM10: float
+    NO: float
+    NO2: float
+    NOx: float
+    NH3: float
+    CO: float
+    SO2: float
+    O3: float
+    Benzene: float
+    Toluene: float
+    Xylene: float
+    AQI: float
 
 @app.post("/predict")
-async def predict(data: Data):
-    try:
-        input_data = data.dict(by_alias=True)
-        print(f"📩 Received input: {input_data}")
+def predict_pollution(data: PollutionInput):
+    input_array = np.array([[data.PM2_5, data.PM10, data.NO, data.NO2, data.NOx, data.NH3,
+                             data.CO, data.SO2, data.O3, data.Benzene, data.Toluene,
+                             data.Xylene, data.AQI]])
+    
+    probabilities = model.predict_proba(input_array)
+    avg_probs = np.array([p[0] if isinstance(p, list) else p for p in probabilities]).flatten()
+    top3_indices = avg_probs.argsort()[::-1][:3]
+    
+    recommendations = []
+    for idx in top3_indices:
+        recommendations.append({
+            "plant": mlb.classes_[idx],
+            "confidence": round(avg_probs[idx], 2)
+        })
 
-        top_plants = predict_top_plants(input_data)
-
-        if not top_plants:
-            raise HTTPException(status_code=500, detail="Prediction failed.")
-
-        return {"top_3_plants": top_plants}
-    except Exception as e:
-        print(f"❌ Exception in /predict: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
-# To run the app
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    return {"recommendations": recommendations}
