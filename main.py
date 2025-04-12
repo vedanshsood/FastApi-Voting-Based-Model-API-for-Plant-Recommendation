@@ -43,13 +43,27 @@ def predict_pollution(data: PollutionInput):
     
     probabilities = model.predict_proba(input_array)
     avg_probs = np.array([p[0] if isinstance(p, list) else p for p in probabilities]).flatten()
-    top3_indices = avg_probs.argsort()[::-1][:3]
     
-    recommendations = []
-    for idx in top3_indices:
-        recommendations.append({
+    # Get top 3 plant recommendations
+    top3_indices = avg_probs.argsort()[::-1][:3]
+    recommendations = [
+        {
             "plant": mlb.classes_[idx],
             "confidence": round(avg_probs[idx], 2)
-        })
+        }
+        for idx in top3_indices
+    ]
 
-    return {"recommendations": recommendations}
+    # Get all plant predictions with confidence scores
+    all_predictions = [
+        {
+            "plant": plant,
+            "confidence": round(confidence, 2)
+        }
+        for plant, confidence in zip(mlb.classes_, avg_probs)
+    ]
+
+    return {
+        "recommendations": recommendations,
+        "all_predictions": all_predictions
+    }
