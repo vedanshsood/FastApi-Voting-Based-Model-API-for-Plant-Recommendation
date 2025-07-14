@@ -44,12 +44,14 @@ def predict_pollution(data: PollutionInput):
     
     # Get probabilities from the model
     probabilities = model.predict_proba(input_array)
+    print("Raw Probabilities:", probabilities)  # Debug output
     
-    # For multi-label, use the probability for each class directly (shape: n_classes)
-    avg_probs = probabilities[0]  # Take the first (and only) sample's probabilities
+    # Revert to original logic
+    avg_probs = np.array([p[0] if isinstance(p, list) else p for p in probabilities]).flatten()
+    print("Averaged Probabilities:", avg_probs)  # Debug output
     
     # Get top 3 plant recommendations
-    top3_indices = np.argsort(avg_probs)[::-1][:3]
+    top3_indices = avg_probs.argsort()[::-1][:3]
     recommendations = [
         {
             "plant": mlb.classes_[idx],
