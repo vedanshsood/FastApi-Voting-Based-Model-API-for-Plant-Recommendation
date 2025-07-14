@@ -45,11 +45,8 @@ def predict_pollution(data: PollutionInput):
     # Get probabilities from the model
     probabilities = model.predict_proba(input_array)
     
-    # For multi-label, use the maximum probability across all classifiers for each class
-    avg_probs = np.max(probabilities, axis=1) if probabilities.ndim > 1 else probabilities
-    
-    # Ensure avg_probs is a 1D array for all classes
-    avg_probs = avg_probs[0] if isinstance(avg_probs, np.ndarray) and avg_probs.ndim > 1 else avg_probs
+    # For multi-label, use the probability for each class directly (shape: n_classes)
+    avg_probs = probabilities[0]  # Take the first (and only) sample's probabilities
     
     # Get top 3 plant recommendations
     top3_indices = np.argsort(avg_probs)[::-1][:3]
